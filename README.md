@@ -1,5 +1,5 @@
 # bytebeat
-create music with math
+create music with math ( well duh! )
 
 view: 
 
