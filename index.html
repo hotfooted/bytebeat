@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <style>
+        html {
+            font-size: 62.5%;
+            box-sizing: border-box;
+        }
+        *{
+            margin: 0;
+            padding: 0;
+            box-sizing: inherit;
+        }
+        .visualiser {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            grid-gap: 2px;
+            padding: 4px;
+        }
+        .calculator {
+            background: #323232;
+            width: 100%;
+            height: 100%;
+            grid-column-start: 1;
+            grid-column-end: 1;
+            grid-row-start: 1;
+            grid-row-end: 1;
+        }
+        .outer-div {
+            white-space: nowrap;
+            overflow:hidden;
+            text-align:left;
+            background-color: #282828;
+        }
+        .inner-div {
+            float:right;
+        }
+        .calculator-screen {
+            width: 100%;
+            font-size: 4rem;
+            height: 48px;
+            border: none;
+            color: #ececec;
+            padding-right: 10px;
+            padding-left: 10px;
+        }
+        button {
+            height: 60px;
+            background-color: #fff;
+            border-radius: 3px;
+            border: 1px solid #484848;
+            background-color: transparent;
+            font-size: 2rem;
+            color: #ececec;
+        }
+        button:hover {
+            background-color: #484848;
+        }
+        .clear {
+            background-color: #da2929;
+        }
+        .clear:hover {
+            background-color: #e55050;
+        }
+        .t-sign {
+            background-color: #a52dbf;
+        }
+        .t-sign:hover {
+            background-color: #bb4ed4;
+        }
+        .equal-sign {
+            background-color: #2e86c0;
+        }
+        .equal-sign:hover {
+            background-color: #4e9ed4;
+        }
+        .calculator-keys {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            grid-gap: 4px 4px;
+            padding: 4px;
+        }
+        .sliderTitle {
+            font-size: 1.1rem;
+            color: #ececec;
+            margin: 4px;
+        }
+        .slider {
+            display: block;
+            width: 99%;
+            margin: 4px;
+        }
+        .visualCanvasHolder {
+            background: #282828;
+            width: 100%;
+            height: 100%;
+        }
+        .visualCanvas {
+            background: #282828;
+            height: 100%;
+            margin: auto;
+            display: block;
+            grid-column-start: 2;
+            grid-column-end: 2;
+            grid-row-start: 1;
+            grid-row-end: 1;
+        }
+        .waveformCanvas {
+            background: #282828;
+            width: 100%;
+            height: 128px;
+            grid-column-start: 1;
+            grid-column-end: 3;
+            grid-row-start: 2;
+        }
+        .audio-control {
+            width: 100%;
+            grid-column-start: 1;
+            grid-column-end: 3;
+        }
+        .errorMessage {
+            display: none;
+            font-size: 1.6rem;
+            color: orange;
+            text-align: center;
+            padding-top: 4px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="visualiser">
+        <div class="calculator">
+            <!--i could add something like this to display a input hint placeholder="t*2*t*3*t*4*t*5"-->
+            <!--<input type="text" class="calculator-screen" value="t*t/2*t*t/4*t*t/8" disabled/>-->
+            <div class="outer-div">
+                <div class="inner-div">
+                    <p class="calculator-screen">t*t/2*t*t/4*t*t/8</p>
+                </div>
+            </div>
+            <output class="errorMessage">PLEASE CHECK YOUR INPUT</output>
+
+            <div class="calculator-keys">
+                <button type="button" class="clear" value="c">C</button>
+                <button type="button" class="undo" value="<">&lt;</button>
+                <button type="button" value="left-parenthesis">&lpar;</button>
+                <button type="button" value="right-parenthesis">&rpar;</button>
+                <button type="button" value="7">7</button>
+                <button type="button" value="8">8</button>
+                <button type="button" value="9">9</button>
+                <button type="button" class="operator" value="/">&sol;</button>
+                <button type="button" value="4">4</button>
+                <button type="button" value="5">5</button>
+                <button type="button" value="6">6</button>
+                <button type="button" class="operator" value="*">&ast;</button>
+                <button type="button" value="1">1</button>
+                <button type="button" value="2">2</button>
+                <button type="button" value="3">3</button>
+                <button type="button" class="operator" value="-">&minus;</button>
+                <button type="button" class="t-sign" value="t">T</button>
+                <button type="button" value="0">0</button>
+                <button type="button" class="equal-sign" value="=">=</button>
+                <button type="button" class="operator" value="+">&plus;</button>
+            </div>
+            <output class="sliderTitle">DURATION: 5 SECONDS</output>
+            <input type="range" class="slider" min="1" max="30" value="5">
+        </div>
+
+        <div class="visualCanvasHolder"><canvas class="visualCanvas"></canvas></div>
+        <canvas class="waveformCanvas"></canvas>
+        <audio controls class="audio-control"></audio>
+    </div>
+
+    <script>
+        //some of my favourites
+        //t-2*t-4*t-8
+        //t+t*2+t+t*4
+        //t/2*t/4*t/8
+
+        //so yes lowering the sample rate reduces the processing time but not enough
+        //at 11025 it still takes ~1 second to process and display the results
+        //during which the ui is not accessible and just doesn't seem good
+        //looking at that other website which encodes audio that had ui lock
+        //as well but i'd rather just do away with it as much as possible
+        //and keep a higher sampleRate too
+        //44100, 22050, 11025
+        var sampleRate = 44100,
+            size = Math.sqrt(sampleRate / 4),
+            visuals,
+            visualIndex = -1,
+            visualCanvas = document.querySelector('.visualCanvas'),
+            visualCanvasCtx = visualCanvas.getContext("2d"),
+            waveCanvas = document.querySelector('.waveformCanvas'),
+            waveCanvasCtx = waveCanvas.getContext("2d"),
+            audioControl = document.querySelector('.audio-control'),
+            sliderTitle = document.querySelector('.sliderTitle'),
+            slider = document.querySelector('.slider'),
+            lastInput = "";
+
+        visualCanvas.width = visualCanvas.height;
+        waveCanvasCtx.fillStyle = 'white';
+        waveCanvasCtx.fillRect(0, waveCanvas.height / 2, waveCanvas.width, 1);
+
+        slider.addEventListener('input', function() {
+            sliderTitle.innerHTML = "DURATION: " + this.value + ' SECONDS';
+        });
+
+        //not really a fan of arrow functions
+        document.querySelector('.calculator-keys').addEventListener('click', function(event) {
+            const target = event.target;
+
+            if (!target.matches('button')) {
+                return;
+            }
+
+            var inputText = document.querySelector('.calculator-screen');
+
+            switch (target.value) {
+                case "=":
+                    //process the input
+                    if (isValidInfixExpression(inputText.innerHTML)) {
+                        document.querySelector('.errorMessage').style.display = "none";
+
+                        processExpression(parse(inputText.innerHTML));
+                    } else {
+                        //flash the screen so the user knows there is a problem
+                        document.querySelector('.errorMessage').style.display = "block";
+                        console.log('invalid expression');
+                    }
+                    break;
+                case "<":
+                    if (inputText.innerHTML.length > 0) {
+                        inputText.innerHTML = inputText.innerHTML.substring(0, inputText.innerHTML.length - 1);
+                        lastInput = inputText.innerHTML[inputText.innerHTML.length - 1];
+                    }
+                    break;
+                case "c":
+                    lastInput = "";
+                    inputText.innerHTML = "";
+                    break;
+                case "(":
+                    var matches = lastInput.match(/[0123456789)]/g);
+                    if (!matches) {
+                        lastInput = target.value;
+                        inputText.innerHTML += target.value;
+                    }
+                    break;
+                case ")":
+                    var matches = lastInput.match(/[\\+\\-\\*\\/(]/g);
+                    if (!matches && inputText.innerHTML.length > 0) {
+                        lastInput = target.value;
+                        inputText.innerHTML += target.value;
+                    }
+                    break;
+                case "*":
+                case "/":
+                case "-":
+                case "+":
+                    var matches = lastInput.match(/[\\*\\/\\-\\+]/g);
+                    if (!matches && inputText.innerHTML.length > 0) {
+                        lastInput = target.value;
+                        inputText.innerHTML += target.value;
+                    }
+                    break;
+                case "t":
+                    var matches = lastInput.match(/[t0123456789)]/g);
+                    if (!matches) {
+                        lastInput = target.value;
+                        inputText.innerHTML += target.value;
+                    }
+                    break;
+                default:
+                    var matches = lastInput.match(/[t)]/g);
+                    if (!matches) {
+                        lastInput = target.value;
+                        inputText.innerHTML += target.value;
+                    }
+                    break;
+            }
+        });
+
+        function processExpression(postfix) {
+            var seconds = slider.value,
+                length = sampleRate * seconds,
+                byteSamples = new Uint8ClampedArray(length),
+                len = length / 4,
+                val = 0,
+                index = 0;
+
+            for (var i = 0; i < len; i++) {
+                val = evaluate(postfix.replace(/t/g, (i + 1)));
+
+                index = i * 4;
+
+                byteSamples[index] = val >> 24 & 255;
+                byteSamples[index + 1] = val >> 16 & 255;
+                byteSamples[index + 2] = val >> 8 & 255;
+                byteSamples[index + 3] = 255; //val & 255;
+            }
+
+            buildAudio(byteSamples);
+            buildVisual(byteSamples);
+            buildWaveformVisual(byteSamples);
+            
+        }
+
+        function buildAudio(byteSamples) {
+            var audioSamples = new Float32Array(byteSamples.length);
+
+            for (var i = 0; i < byteSamples.length; i++) {
+                audioSamples[i] = map(byteSamples[i], 0, 255, -1, 1);
+            }
+            //i need to work out why this is throwing errors i believe it is the mime type
+            var encoding = encodeWavFile(audioSamples);
+            audioControl.src = URL.createObjectURL(new Blob([encoding], {
+                type: "audio/x-wav"
+            }));
+        }
+
+        function buildVisual(byteSamples) {
+            visuals = [];
+            visualIndex = -1;
+
+            var splitCount = byteSamples.length / sampleRate,
+                offset = 0;
+
+            for (var i = 0; i < splitCount; i++) {
+                offset = i * sampleRate;
+                visuals.push(new ImageData(byteSamples.slice(offset, offset + sampleRate), size, size));
+            }
+
+            requestAnimationFrame(update);
+        }
+
+        function buildWaveformVisual(byteSamples) {
+            var sampleDisplayWidth = 1,
+                sampleDisplaySpacing = 1,
+                sampleDisplayHeight = waveCanvas.height - 8,
+                scaledLength = Math.floor(waveCanvas.width / (sampleDisplayWidth + sampleDisplaySpacing)),
+                stepSize = Math.floor(byteSamples.length / scaledLength),
+                average = 0,
+                x = 0,
+                y = waveCanvas.height / 2;
+
+            for (var i = 0; i < byteSamples.length; i++) {
+                //average += map(byteSamples[i], 0, 255, -1, 1);
+                average += map(byteSamples[i], 0, 255, 0, 1) * sampleDisplayHeight;
+
+                if (i % stepSize === 0) {
+                    average /= stepSize;
+                    waveCanvasCtx.fillRect(x * sampleDisplayWidth + x * sampleDisplaySpacing, y - average / 2, sampleDisplayWidth, average);
+                    x++;
+                    average = 0;
+                }
+            }
+        }
+
+        function update() {
+            var newVisualIndex = Math.min(visuals.length - 1, Math.floor(audioControl.currentTime));
+            if (newVisualIndex > visualIndex) {
+                visualIndex = newVisualIndex;
+                var offsetX = visualCanvas.width / 2 - size / 2;
+                var offsetY = visualCanvas.height / 2 - size / 2;
+                visualCanvasCtx.putImageData(visuals[visualIndex], offsetX, offsetY);
+                visualCanvasCtx.fillStyle = "white";
+                visualCanvasCtx.fillText("" + (visualIndex + 1), visualCanvas.width / 2, visualCanvas.height / 2);
+            }
+
+            if (visualIndex < visuals.length) {
+                requestAnimationFrame(update);
+            }
+        }
+
+        function isValidInfixExpression(infixExpression) {
+            var parenthesisCount = 0;
+            for (var i = 0; i < infixExpression.length; i++) {
+                if (infixExpression[i] === "(") {
+                    parenthesisCount++;
+                } else if (infixExpression[i] === ")") {
+                    parenthesisCount--;
+                    if (parenthesisCount < 0) {
+                        return false;
+                    }
+                }
+            }
+            return parenthesisCount === 0;
+        }
+
+        function parse(infixExpression) {
+            var stack = [],
+                output = "",
+                tokens = ("(" + infixExpression + ")").split(/([\\*\\/\\-\\+()])/g).reverse();
+
+            while (tokens.length > 0) {
+                var token = tokens.pop();
+                switch (token) {
+                    case "+":
+                    case "-":
+                    case "*":
+                    case "/":
+                        stack.push(token);
+                        break;
+                    case "(":
+                        continue;
+                    case ")":
+                        while (stack.length > 0) {
+                            output += stack.pop() + " ";
+                        }
+                        break;
+                    default:
+                        output += token + " ";
+                        break;
+                }
+            }
+            return output.trim();
+        }
+
+        function evaluate(postfixExpression) {
+            var stack = [],
+                tokens = postfixExpression.split(" ").reverse(),
+                op1 = 0,
+                op2 = 0;
+
+            while (tokens.length > 0) {
+                var token = tokens.pop();
+                switch (token) {
+                    case "*":
+                        op2 = stack.pop();
+                        op1 = stack.pop();
+                        stack.push(op1 * op2);
+                        break;
+                    case "/":
+                        op2 = stack.pop();
+                        op1 = stack.pop();
+                        if (op2 === 0) {
+                            stack.push(op1); //from what i have seen just handle div by zero as if it were 1
+                        } else {
+                            stack.push(Math.round(op1 / op2)); //should this be round?
+                        }
+                        break;
+                    case "-":
+                        op2 = stack.pop();
+                        op1 = stack.pop();
+                        stack.push(op1 - op2);
+                        break;
+                    case "+":
+                        op2 = stack.pop();
+                        op1 = stack.pop();
+                        stack.push(op1 + op2);
+                        break;
+                    default:
+                        stack.push(parseInt(token));
+                        break;
+                }
+            }
+            return stack.pop();
+        }
+        //////////////////////////
+        //https://stackoverflow.com/a/5732390
+        //output = output_start + ((output_end - output_start) / (input_end - input_start)) * (input - input_start)
+        //not sure where this version came from but it works
+        function map(value, start1, stop1, start2, stop2) {
+            return start2 + (stop2 - start2) * ((value - start1) / (stop1 - start1));
+        }
+
+        //////////////////////////
+        //a hacked up wav encoder taken from somewhere i cannot remember
+        //this only encodes single channel 32bit 44100hz wav files
+        function encodeWavFile(samples) {
+            var buffer = new ArrayBuffer(44 + samples.length * 4);
+            var view = new DataView(buffer);
+
+            //RIFF identifier
+            writeString(view, 0, 'RIFF');
+            //RIFF chunk length
+            view.setUint32(4, 36 + samples.length * 4, true);
+            //RIFF type
+            writeString(view, 8, 'WAVE');
+            //format chunk identifier
+            writeString(view, 12, 'fmt ');
+            //format chunk length
+            view.setUint32(16, 16, true);
+            //sample format (raw)
+            view.setUint16(20, 3, true);
+            //channel count
+            view.setUint16(22, 1, true);
+            //sample rate
+            view.setUint32(24, sampleRate, true);
+            //byte rate (sample rate * block align)
+            view.setUint32(28, sampleRate * 4, true);
+            //block align (channel count * bytes per sample)
+            view.setUint16(32, 4, true);
+            //bits per sample
+            view.setUint16(34, 32, true);
+            //data chunk identifier
+            writeString(view, 36, 'data');
+            //data chunk length
+            view.setUint32(40, samples.length * 4, true);
+            //raw pcm
+            writeFloat32(view, 44, samples);
+
+            return buffer;
+        }
+
+        function writeFloat32(output, offset, input) {
+            for (var i = 0; i < input.length; i++, offset += 4) {
+                output.setFloat32(offset, input[i], true)
+            }
+        }
+
+        function writeString(view, offset, string) {
+            for (var i = 0; i < string.length; i++) {
+                view.setUint8(offset + i, string.charCodeAt(i))
+            }
+        }
+        //////////////////////////
+
+    </script>
+</body>
+
+</html>
