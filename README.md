@@ -19,6 +19,7 @@ todo:
 2) move some of the processing into web workers or one of the other options listed below
 
 https://developer.mozilla.org/en-US/docs/Tools/Performance/Scenarios/Intensive_JavaScript
+
 https://jsfiddle.net/e0x7wu4a/
 
 3) remove the second indicator over the visual canvas
