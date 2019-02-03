@@ -20,3 +20,6 @@ todo:
 
 https://developer.mozilla.org/en-US/docs/Tools/Performance/Scenarios/Intensive_JavaScript
 https://jsfiddle.net/e0x7wu4a/
+
+3) remove the second indicator over the visual canvas
+4) add an option for alpha channel in the visualisation (it's turned off at the moment)
